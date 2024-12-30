@@ -4,7 +4,12 @@ function isValidMove(grid, block, x, y) {
   const blockSizeX = block[0].length;
   const blockSizeY = block.length;
 
-  if (x < 0 || x + blockSizeY > gridSize || y < 0 || y + blockSizeX > gridSize) {
+  if (
+    x < 0 ||
+    x + blockSizeY > gridSize ||
+    y < 0 ||
+    y + blockSizeX > gridSize
+  ) {
     return false;
   }
 
@@ -21,16 +26,14 @@ function isValidMove(grid, block, x, y) {
 
 // Place a block on the grid
 function placeBlock(grid, block, x, y) {
-  const gridSize = grid.length;
   const blockSizeX = block[0].length;
   const blockSizeY = block.length;
 
-  const newGrid = [...grid];
+  const newGrid = grid.map((row) => [...row]);
 
   for (let i = 0; i < blockSizeY; i++) {
     for (let j = 0; j < blockSizeX; j++) {
       if (block[i][j] === 1) {
-        newGrid[x + i] = [...newGrid[x + i]];
         newGrid[x + i][y + j] = 1;
       }
     }
@@ -42,10 +45,8 @@ function placeBlock(grid, block, x, y) {
 // Clear completed rows and columns
 function clearCompletedLines(grid) {
   const gridSize = grid.length;
-
-  const newGrid = grid.map((row) => [...row]);
-
   let score = 0;
+  const newGrid = grid.map((row) => [...row]);
 
   // Clear completed rows
   for (let i = 0; i < gridSize; i++) {
@@ -68,34 +69,6 @@ function clearCompletedLines(grid) {
   return { grid: newGrid, score };
 }
 
-// Evaluate the board state
-function evaluateBoard(grid) {
-  const gridSize = grid.length;
-
-  let completedRows = 0;
-  let completedCols = 0;
-  let holes = 0;
-
-  for (let i = 0; i < gridSize; i++) {
-    if (grid[i].every((cell) => cell === 1)) completedRows++;
-    for (let j = 0; j < gridSize; j++) {
-      if (grid[i][j] === 0) {
-        // Check if there's a filled cell above, creating a hole
-        if (i > 0 && grid[i - 1][j] === 1) holes++;
-      }
-    }
-  }
-
-  for (let j = 0; j < gridSize; j++) {
-    if (grid.every((row) => row[j] === 1)) completedCols++;
-  }
-
-  const lineClearBonus = (completedRows + completedCols) * 100;
-  const holePenalty = holes * 5;
-
-  return lineClearBonus - holePenalty;
-}
-
 // Get all valid moves for a single block
 function getAvailableMoves(grid, block) {
   const gridSize = grid.length;
@@ -115,106 +88,51 @@ function getAvailableMoves(grid, block) {
   return moves;
 }
 
-// Minimax with alpha-beta pruning
-function minimax(grid, pieces, depth, isMaximizing, alpha, beta) {
-  if (depth === 0 || pieces.length === 0) {
-    return { score: evaluateBoard(grid) };
+// Backtracking function to explore all possible block placements
+function backtrack(grid, pieces, index, currentScore, order) {
+  if (index === pieces.length) {
+    return { grid, currentScore, order };
   }
 
-  let bestMove = null;
-
-  if (isMaximizing) {
-    let maxEval = -Infinity;
-    for (const move of getAvailableMoves(grid, pieces[0])) {
-      const newGrid = placeBlock(grid, pieces[0], move.x, move.y);
-      const { grid: clearedGrid, score: clearedScore } = clearCompletedLines(newGrid);
-
-      const eval = minimax(clearedGrid, pieces.slice(1), depth - 1, false, alpha, beta).score + clearedScore;
-
-      if (eval > maxEval) {
-        maxEval = eval;
-        bestMove = { move, eval };
-      }
-
-      alpha = Math.max(alpha, eval);
-      if (beta <= alpha) break;
-    }
-    return { score: maxEval, bestMove };
-  } else {
-    let minEval = Infinity;
-    for (const move of getAvailableMoves(grid, pieces[0])) {
-      const newGrid = placeBlock(grid, pieces[0], move.x, move.y);
-      const { grid: clearedGrid, score: clearedScore } = clearCompletedLines(newGrid);
-
-      const eval = minimax(clearedGrid, pieces.slice(1), depth - 1, true, alpha, beta).score - clearedScore;
-
-      if (eval < minEval) {
-        minEval = eval;
-        bestMove = { move, eval };
-      }
-
-      beta = Math.min(beta, eval);
-      if (beta <= alpha) break;
-    }
-    return { score: minEval, bestMove };
-  }
-}
-
-// Generate all permutations of pieces
-function generatePermutations(pieces) {
-  if (pieces.length === 1) return [pieces];
-  return pieces.flatMap((piece, i) =>
-    generatePermutations(pieces.slice(0, i).concat(pieces.slice(i + 1))).map(
-      (permutation) => [piece, ...permutation],
-    ),
-  );
-}
-
-// Find the best order of pieces
-function findBestOrder(grid, pieces) {
-  const permutations = generatePermutations(pieces);
-  let bestOrder = null;
+  const block = pieces[index];
+  const availableMoves = getAvailableMoves(grid, block);
   let bestScore = -Infinity;
+  let bestGrid = grid;
+  let bestOrder = [...order];
 
-  for (const order of permutations) {
-    const { score } = minimax(grid, order, order.length, true, -Infinity, Infinity);
-    if (score > bestScore) {
-      bestScore = score;
-      bestOrder = order;
+  for (const { x, y } of availableMoves) {
+    const newGrid = placeBlock(grid, block, x, y);
+    const { grid: clearedGrid, score } = clearCompletedLines(newGrid);
+    const newOrder = [...order, { pieceIndex: index, x, y }];
+    const result = backtrack(
+      clearedGrid,
+      pieces,
+      index + 1,
+      currentScore + score,
+      newOrder,
+    );
+
+    if (result.currentScore > bestScore) {
+      bestScore = result.currentScore;
+      bestGrid = result.grid;
+      bestOrder = result.order;
     }
   }
 
-  return { bestOrder, bestScore };
+  return { grid: bestGrid, currentScore: bestScore, order: bestOrder };
 }
 
-// Play the game using the best piece order
-function playGameWithBestOrder(grid, pieces) {
-  const { bestOrder } = findBestOrder(grid, pieces);
-  let currentGrid = grid;
-  let totalScore = 0;
-
-  if (!bestOrder) {
-    console.log("No valid moves found.");
-    return { finalGrid: currentGrid, totalScore: 0 };
-  }
-
-  for (const piece of bestOrder) {
-    const { bestMove } = minimax(currentGrid, [piece], 1, true, -Infinity, Infinity);
-    if (bestMove) {
-      currentGrid = placeBlock(currentGrid, piece, bestMove.move.x, bestMove.move.y);
-      const { grid: clearedGrid, score } = clearCompletedLines(currentGrid);
-      currentGrid = clearedGrid;
-      totalScore += score;
-      displayBoard(currentGrid, piece, bestMove.move.x, bestMove.move.y);
-    } else {
-      break;
-    }
-  }
-
-  return { finalGrid: currentGrid, totalScore };
+// Play the game with backtracking
+function playGameWithBacktracking(grid, pieces) {
+  const {
+    grid: finalGrid,
+    currentScore,
+    order,
+  } = backtrack(grid, pieces, 0, 0, []);
+  return { finalGrid, currentScore, order };
 }
 
-// Display the board in a readable format with optional piece placement
+// Display the board in a human-readable format
 function displayBoard(grid, piece, row, col) {
   const gridSize = grid.length;
 
@@ -225,7 +143,9 @@ function displayBoard(grid, piece, row, col) {
 
       if (piece) {
         isPartOfPiece = piece.some((rowPiece, pr) =>
-          rowPiece.some((cell, pc) => cell === 1 && r === row + pr && c === col + pc),
+          rowPiece.some(
+            (cell, pc) => cell === 1 && r === row + pr && c === col + pc,
+          ),
         );
       }
 
@@ -242,7 +162,18 @@ function displayBoard(grid, piece, row, col) {
   console.log("---");
 }
 
-// Example Usage
+// Display the board after each piece is placed
+function displayWithOrder(grid, pieces, order) {
+  order.forEach(({ pieceIndex, x, y }) => {
+    const piece = pieces[pieceIndex];
+    console.log(`Placing piece ${pieceIndex + 1} at (${x}, ${y}):`);
+    grid = placeBlock(grid, piece, x, y);
+    const { grid: clearedGrid, score } = clearCompletedLines(grid);
+    displayBoard(clearedGrid, piece, x, y);
+    grid = clearedGrid;
+  });
+}
+
 const grid = [
   [0, 1, 0, 0, 1, 0, 0, 1],
   [0, 0, 1, 0, 0, 0, 0, 0],
@@ -265,7 +196,12 @@ const pieces = [
   ],
 ];
 
-const result = playGameWithBestOrder(grid, pieces);
-console.log("Final Score:", result.totalScore);
+const result = playGameWithBacktracking(grid, pieces);
+
+// Display the board after each piece is placed
+console.log("Displaying board after each piece is placed:");
+displayWithOrder(grid, pieces, result.order);
+
+console.log("Final Score:", result.currentScore);
 console.log("Final Grid:");
 displayBoard(result.finalGrid);
