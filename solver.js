@@ -166,9 +166,9 @@ function displayBoard(grid, piece, row, col) {
 function displayWithOrder(grid, pieces, order) {
   order.forEach(({ pieceIndex, x, y }) => {
     const piece = pieces[pieceIndex];
-    console.log(`Placing piece ${pieceIndex + 1} at (${x}, ${y}):`);
+    console.log(`Placing piece ${pieceIndex + 1} at (${y+1}, ${8-x}):`);
     grid = placeBlock(grid, piece, x, y);
-    const { grid: clearedGrid, score } = clearCompletedLines(grid);
+    const { grid: clearedGrid } = clearCompletedLines(grid);
     displayBoard(clearedGrid, piece, x, y);
     grid = clearedGrid;
   });
