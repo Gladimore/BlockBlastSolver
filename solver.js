@@ -88,9 +88,10 @@ function getAvailableMoves(grid, block) {
   return moves;
 }
 
-// Backtracking function to explore all possible block placements
-function backtrack(grid, pieces, index, currentScore, order) {
-  if (index === pieces.length) {
+// Backtracking with dynamic lookahead
+function backtrackWithDynamicLookahead(grid, pieces, index, currentScore, order, maxLookahead) {
+  // Base case: all pieces placed or lookahead depth reached
+  if (index === pieces.length || maxLookahead === 0) {
     return { grid, currentScore, order };
   }
 
@@ -101,17 +102,22 @@ function backtrack(grid, pieces, index, currentScore, order) {
   let bestOrder = [...order];
 
   for (const { x, y } of availableMoves) {
+    // Place the block and clear completed lines
     const newGrid = placeBlock(grid, block, x, y);
     const { grid: clearedGrid, score } = clearCompletedLines(newGrid);
+
+    // Lookahead: Explore future placements
     const newOrder = [...order, { pieceIndex: index, x, y }];
-    const result = backtrack(
+    const result = backtrackWithDynamicLookahead(
       clearedGrid,
       pieces,
       index + 1,
       currentScore + score,
       newOrder,
+      maxLookahead - 1 // Decrease lookahead depth
     );
 
+    // Choose the placement with the highest score
     if (result.currentScore > bestScore) {
       bestScore = result.currentScore;
       bestGrid = result.grid;
@@ -122,13 +128,14 @@ function backtrack(grid, pieces, index, currentScore, order) {
   return { grid: bestGrid, currentScore: bestScore, order: bestOrder };
 }
 
-// Play the game with backtracking
-function playGameWithBacktracking(grid, pieces) {
+// Play the game with dynamic lookahead
+function playGameWithDynamicLookahead(grid, pieces) {
+  const maxLookahead = 3; // Set maximum lookahead depth for the first piece
   const {
     grid: finalGrid,
     currentScore,
     order,
-  } = backtrack(grid, pieces, 0, 0, []);
+  } = backtrackWithDynamicLookahead(grid, pieces, 0, 0, [], maxLookahead);
   return { finalGrid, currentScore, order };
 }
 
@@ -166,7 +173,7 @@ function displayBoard(grid, piece, row, col) {
 function displayWithOrder(grid, pieces, order) {
   order.forEach(({ pieceIndex, x, y }) => {
     const piece = pieces[pieceIndex];
-    console.log(`Placing piece ${pieceIndex + 1} at (${y+1}, ${8-x}):`);
+    console.log(`Placing piece ${pieceIndex + 1} at (${y + 1}, ${8 - x}):`);
     grid = placeBlock(grid, piece, x, y);
     const { grid: clearedGrid } = clearCompletedLines(grid);
     displayBoard(clearedGrid, piece, x, y);
@@ -174,6 +181,7 @@ function displayWithOrder(grid, pieces, order) {
   });
 }
 
+// Initial grid and pieces
 const grid = [
   [0, 1, 0, 0, 1, 0, 0, 1],
   [0, 0, 1, 0, 0, 0, 0, 0],
@@ -196,7 +204,8 @@ const pieces = [
   ],
 ];
 
-const result = playGameWithBacktracking(grid, pieces);
+// Play the game with dynamic lookahead
+const result = playGameWithDynamicLookahead(grid, pieces);
 
 // Display the board after each piece is placed
 console.log("Displaying board after each piece is placed:");
